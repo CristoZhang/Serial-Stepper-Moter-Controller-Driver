@@ -2,7 +2,7 @@
 ## 1. Overview
  This is a python based serial stepper motor controller driver library.  
   The specific models used are shown below：  
-  ![image](https://github.com/WikChang/Serial-Stepper-Moter-Controller-Driver/blob/main/image/502d6c870e4adb04e1f16087e195345.jpg)
+  ![image](https://github.com/WikChang/Serial-Stepper-Moter-Controller-Driver/blob/main/image/502d6c870e4adb04e1f16087e195345.jpg)  
   Taobao key words: 串口modbusRS485步进电机驱动器42/57/86控制可编程动作自动调速
 
  ---
