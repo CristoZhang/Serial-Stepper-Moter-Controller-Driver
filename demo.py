@@ -1,6 +1,6 @@
 import serial
 import time
-import Mymodbus.Mymodbus
+from Mymodbus.Mymodbus import Mymodbus
 
 ser = Mymodbus('COM4', 9600, timeout=1)
 
