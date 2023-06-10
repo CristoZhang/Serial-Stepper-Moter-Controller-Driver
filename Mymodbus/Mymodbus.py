@@ -1,5 +1,6 @@
 import serial
 import time
+import binascii
 
 class Mymodbus(serial.Serial):
     def __init__(self, *args, **kwargs):
@@ -21,9 +22,23 @@ class Mymodbus(serial.Serial):
             command = bytes.fromhex(command)
             self.flushInput()
             self.write(command)
-            time.sleep(0.05)   
+            time.sleep(0.1)   
         except serial.SerialException as e:
             print(f'Error writing to serial port: {e}')
+
+    # Calculate CRC16
+    @staticmethod
+    def crc16(data: bytes) -> bytes:
+        crc = 0xFFFF
+        for byte in data:
+            crc ^= byte
+            for _ in range(8):
+                if crc & 1:
+                    crc >>= 1
+                    crc ^= 0xA001
+                else:
+                    crc >>= 1
+        return crc.to_bytes(2, 'little')  # 'little' for little endian
 
     # Query modbus
     def query_param(self, function_code):
@@ -68,10 +83,15 @@ class Mymodbus(serial.Serial):
     def set_speed(self, speed):
         if speed not in range(0, 1000): #1~1000R/Min
             raise ValueError('Invalid speed')
-        speed = hex(speed)[2:].zfill(4)
-        speed = speed[:2] +" "+ speed[2:]
-        command = "01 06 00 04 " + speed + " C8 1A"
-        self.set_command(command)
+        # Create command without CRC
+        command_without_crc = bytearray([0x01, 0x06, 0x00, 0x04, (speed >> 8) & 0xFF, speed & 0xFF])
+        # Calculate CRC
+        crc = self.crc16(command_without_crc)
+        # Concatenate command with CRC
+        command = command_without_crc + crc
+        # Convert to hex string for printing
+        command_str = ' '.join(f'{b:02X}' for b in command)
+        self.set_command(command_str)
 
     '''
     The following three(set_impulse, set_circle,set_angle) 
@@ -79,30 +99,33 @@ class Mymodbus(serial.Serial):
     '''
     # Set the number of pulses, the range is 0~65535
     def set_impulse(self, impulse):
-        if impulse not in range(0, 65535):
+        if impulse not in range(0, 65536):
             raise ValueError('Invalid impulse')
-        impulse = hex(impulse)[2:].zfill(4)
-        impulse = impulse[:2] +" "+ impulse[2:]
-        command = "01 06 00 05 " + impulse + " 98 0D"
-        self.set_command(command)
+        command_without_crc = bytearray([0x01, 0x06, 0x00, 0x05, (impulse >> 8) & 0xFF, impulse & 0xFF])
+        crc = self.crc16(command_without_crc)
+        command = command_without_crc + crc
+        command_str = ' '.join(f'{b:02X}' for b in command)
+        self.set_command(command_str)
     
-    # Set the number of circles, the range is 0~65535
+    # # Set the number of circles, the range is 0~65535
     def set_circle(self, circle):
-        if circle not in range(0, 65535):
+        if circle not in range(0, 65536):
             raise ValueError('Invalid circle')
-        circle = hex(circle)[2:].zfill(4)
-        circle = circle[:2] +" "+ circle[2:]
-        command = "01 06 00 06 " + circle + " 68 0D"
-        self.set_command(command)
+        command_without_crc = bytearray([0x01, 0x06, 0x00, 0x06, (circle >> 8) & 0xFF, circle & 0xFF])
+        crc = self.crc16(command_without_crc)
+        command = command_without_crc + crc
+        command_str = ' '.join(f'{b:02X}' for b in command)
+        self.set_command(command_str)
     
     # Set the angle, the range is 0~65535
     def set_angle(self, angle):
-        if angle not in range(0, 65535):
+        if angle not in range(0, 65536):
             raise ValueError('Invalid angle')
-        angle = hex(angle)[2:].zfill(4)
-        angle = angle[:2] +" "+ angle[2:]
-        command = "01 06 00 07 " + angle + " 39 CD"
-        self.set_command(command)
+        command_without_crc = bytearray([0x01, 0x06, 0x00, 0x07, (angle >> 8) & 0xFF, angle & 0xFF])
+        crc = self.crc16(command_without_crc)
+        command = command_without_crc + crc
+        command_str = ' '.join(f'{b:02X}' for b in command)
+        self.set_command(command_str)
 
     '''
     Start rotation
@@ -123,21 +146,22 @@ class Mymodbus(serial.Serial):
                 # print(data)
                 if state != "0001":
                     break
-            except IndexError:
+            except ValueError as e:
+                self.stop()
                 pass
             
             ''' Timeout time of 10 seconds,
             Note that if the speed is too slow, 
             be sure to add a delay or comment out the code.
             '''
-            if time.time() - start_time > 10:  
+            if time.time() - start_time > 30:  
                 raise TimeoutError("Timeout while waiting for response")
                 break
 
             if state is None:
                 raise ValueError("State variable not initialized")
                 break
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     '''Pause rotation
     If you pause and start again, 
